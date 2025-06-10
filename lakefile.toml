@@ -1,0 +1,10 @@
+name = "LeanHypothesis"
+version = "0.1.0"
+defaultTargets = ["leanhypothesis"]
+
+[[lean_lib]]
+name = "LeanHypothesis"
+
+[[lean_exe]]
+name = "leanhypothesis"
+root = "Main"

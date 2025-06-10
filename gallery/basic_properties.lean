@@ -11,14 +11,15 @@ open LeanHypothesis.Syntax
 
 -- Example 1: Basic arithmetic properties
 
-property additionCommutative : Nat where
-  ∀hypothesis (n m : Nat), n + m = m + n
+def additionCommutativeTest : IO Bool := 
+  defineProperty "additionCommutative" (fun (pair : Nat × Nat) => pair.1 + pair.2 = pair.2 + pair.1)
 
-property additionAssociative : Nat where  
-  ∀hypothesis (n m k : Nat), (n + m) + k = n + (m + k)
+def additionAssociativeTest : IO Bool := 
+  defineProperty "additionAssociative" (fun (triple : Nat × Nat × Nat) => 
+    (triple.1 + triple.2.1) + triple.2.2 = triple.1 + (triple.2.1 + triple.2.2))
 
-property multiplicationCommutative : Nat where
-  ∀hypothesis (n m : Nat), n * m = m * n
+def multiplicationCommutativeTest : IO Bool := 
+  defineProperty "multiplicationCommutative" (fun (pair : Nat × Nat) => pair.1 * pair.2 = pair.2 * pair.1)
 
 -- Example 2: List properties
 

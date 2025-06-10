@@ -57,4 +57,13 @@ instance {α : Type} [Testable α] : Testable (List α) where
     else
       none
 
+instance {α β : Type} [Testable α] [Testable β] : Testable (α × β) where
+  mkStrategy := do
+    let stratA ← Testable.mkStrategy (α := α)
+    let stratB ← Testable.mkStrategy (α := β)
+    pure ⟨s!"tuple({stratA.id},{stratB.id})"⟩
+  parseGenerated s := 
+    -- Simple tuple parsing - placeholder
+    sorry
+
 end LeanHypothesis

@@ -1,0 +1,8 @@
+# Cursor Rules Override for LeanHypothesis project
+
+## Lean-specific search guidance
+- For searching Lean definitions, the assistant should prefer the `lean-explore` search tool over generic semantic search. Lean definitions evolve quickly and `lean-explore` provides up-to-date results directly from the installed Lean packages.
+
+## General guidelines (project-specific additions)
+- When diagnosing build or proof issues, first gather context with `lean-lsp` tools, but use `lean-explore` for locating lemmas/defs.
+- Keep these rules in sync with project tooling changes. 

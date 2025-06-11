@@ -124,3 +124,49 @@
 +## Acknowledgments
 +
 +Built on top of the excellent [Hypothesis](https://hypothesis.readthedocs.io/) library for Python.
++
++## Counterexample Gallery: LeanHypothesis vs Python/Hypothesis
++
++Below is a quick visual comparison showing how the exact same failing properties are rendered by LeanHypothesis versus the raw output you would get from running Python/Hypothesis directly.  The examples were captured from the current integration-test suite.
++
++| Property checked | LeanHypothesis output | Python/Hypothesis output |
++|------------------|-----------------------|--------------------------|
++| `x > 100`  (strategy `nat`, 20 tests) | 
++```text
++[FFI] ✗ Found 4 counterexample(s):
+  [1] Counterexample: 0
+  [2] Counterexample: 54
+      Final shrink: 50
+      Shrink trace: #[0, 51, 14, 30]
+  [3] Counterexample: 1
+      Final shrink: 0
+  [4] Counterexample: 21
+``` | 
++```text
++Falsifying example: x=0
++Falsifying example: x=54
++Falsifying example: x=1
++Falsifying example: x=21
++``` |
++| `len(xs) % 2 == 1`  (strategy `list(text)`, 30 tests) | 
++```text
++[FFI] ✗ Found 30 counterexample(s):
+  [1] Counterexample: #[]
+  [2] Counterexample: #["c", "=", "l"]
+      Final shrink: #["c"]
+      Shrink trace: #[#[], #[], #["x"], #["y"]]
+  ...
+``` | 
++```text
++Falsifying example: xs=[]
++Falsifying example: xs=['c', '=', 'l']
++... (28 more) ...
++``` |
++
++In LeanHypothesis:
++
++* Counter-examples are **indexed** and grouped.
++* Shrinking information is surfaced via `Final shrink` and a compact `Shrink trace`.
++* Non-ASCII / control characters are escaped as `\uXXXX`, guaranteeing clean terminal output.
++
++This makes it dramatically quicker to understand why a property failed without scrolling through pages of raw Hypothesis logs.

@@ -71,6 +71,64 @@ def parsePythonResult (jsonStr : String) (context : String := "") : FFIResult Py
     | .error _ => .error (FFIError.jsonParseError jsonStr s!"Missing status field in {context}")
   | .error e => .error (FFIError.jsonParseError jsonStr s!"JSON parse failed in {context}: {e}")
 
+/-! ## Helper utilities -/
+
+/-/ Four-digit lowercase hexadecimal representation of `n` (< 65536). -/
+private def hex4 (n : Nat) : String :=
+  let digits := Nat.toDigits 16 n  -- Lean returns list Char
+  let pad := List.replicate (4 - digits.length) '0'
+  String.mk (pad ++ digits)
+
+/-/ Render a string safely for terminal output:
+    • Printable 7-bit ASCII stays as-is.
+    • TAB / NEWLINE become visible glyphs (⇥, ⏎).
+    • Every other code-point is escaped as \uXXXX.
+    • If the resulting string exceeds `maxLen`, truncate and annotate. -/
+private def sanitizeAscii (s : String) (maxLen : Nat := 80) : String :=
+  let rendered :=
+    s.foldl (init := "") fun acc c =>
+      let n := c.toNat
+      if 32 ≤ n ∧ n < 127 then
+        acc.push c
+      else if c = '\n' then
+        acc ++ "⏎"
+      else if c = '\t' then
+        acc ++ "⇥"
+      else
+        acc ++ "\\u" ++ hex4 n
+  if rendered.length > maxLen then
+    rendered.take maxLen ++ "…(" ++ toString s.length ++ " chars)"
+  else
+    rendered
+
+/-/ Recursively convert a `Lean.Json` value (possibly *repeatedly* encoded as a
+    JSON string) into a human-readable string. This tries to unwrap the common
+    pattern produced by the Python bridge where values are encoded *twice*:
+
+    • the outer layer represents the counterexample value (e.g. a JSON array),
+    • string elements inside that array are themselves JSON-encoded strings
+      (because the Python side uses `json.dumps` on the example values).
+
+  The algorithm keeps peeling layers as long as parsing succeeds. For compound
+  structures like arrays we recursively pretty-print the children so we end up
+  with far fewer `\uXXXX` escapes in the final output.
+-/
+private partial def jsonPretty (j : Lean.Json) : String :=
+  let rec aux (j : Lean.Json) : String :=
+    match j with
+    | .str s =>
+      -- Attempt to parse the *contents* of the string again. If that succeeds
+      -- we recurse, otherwise we just return the decoded Lean string `s`.
+      match Lean.Json.parse s with
+      | .ok inner => aux inner
+      | .error _  => sanitizeAscii s
+    | .arr arr =>
+      let elems := arr.map aux
+      s!"#[{String.intercalate ", " elems.toList}]"
+    | .obj o => (Lean.Json.obj o).compress  -- Fall back to compressed JSON representation
+    | other   => other.compress
+  aux j
+
 /-! ## Process Management and Data Generation -/
 
 /-- Generate test data using Python subprocess call with enhanced error handling -/
@@ -145,19 +203,20 @@ def runPropertyTest (strategyName : String) (propertyFn : String) (numTests : Na
                       let failure := failures[i]!
                       match failure.getObjVal? "value" with
                       | .ok valueJson =>
-                        match valueJson.getStr? with
-                        | .ok value =>
-                          IO.eprintln s!"  [{i+1}] Counterexample: {value}"
-                          -- Show shrinks if available
-                          match failure.getObjVal? "shrinks" with
-                          | .ok shrinksJson =>
-                            match shrinksJson.getArr? with
-                            | .ok shrinks =>
-                              if shrinks.size > 0 then
-                                let shrinkStrs := shrinks.filterMap (·.getStr?.toOption)
-                                if shrinkStrs.size > 0 then
-                                  IO.eprintln s!"      Shrunk to: {shrinkStrs.take 5}"
-                            | _ => pure ()
+                        let pretty := jsonPretty valueJson
+                        IO.eprintln s!"  [{i+1}] Counterexample: {pretty}"
+                        -- Show shrinks if available, but prefer the *final* shrunk value
+                        match failure.getObjVal? "shrinks" with
+                        | .ok shrinksJson =>
+                          match shrinksJson.getArr? with
+                          | .ok shrinks =>
+                            if shrinks.size > 0 then
+                              let final := shrinks[shrinks.size - 1]! -- Lean's arrays are 0-indexed and size > 0
+                              IO.eprintln s!"      Final shrink: {jsonPretty final}"
+                              if shrinks.size > 1 then
+                                -- Optionally also show a preview of the first few intermediate shrinks
+                                let preview := (shrinks.take 4).map jsonPretty
+                                IO.eprintln s!"      Shrink trace: {preview}"
                           | _ => pure ()
                         | _ => pure ()
                       | _ => pure ()
